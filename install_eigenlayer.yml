@@ -1,0 +1,75 @@
+---
+- name: Automate EigenLayer Program Installation
+  hosts: localhost
+  become: true
+  vars:
+    go_version: "1.21.4"
+    eigenlayer_cli_repo: "https://github.com/Layr-Labs/eigenlayer-cli.git"
+    docker_compose_version: "1.29.2"
+
+  tasks:
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: 'yes'
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_version
+      failed_when: docker_version.rc != 0
+      ignore_errors: yes
+
+    - name: Install Docker Compose
+      shell: |
+        mkdir -p ~/.docker/cli-plugins/
+        curl -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
+        chmod +x ~/.docker/cli-plugins/docker-compose
+
+    - name: Check Docker Compose installation
+      command: docker-compose --version
+      register: docker_compose_check
+      failed_when: docker_compose_check.rc != 0
+
+    - name: Download and Extract Go
+      block:
+        - name: Download Go binary
+          get_url:
+            url: "https://golang.org/dl/go{{ go_version }}.linux-amd64.tar.gz"
+            dest: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+
+        - name: Extract Go binary
+          unarchive:
+            src: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+            dest: "/usr/local"
+            remote_src: yes
+
+    - name: Set Go PATH Environment Variable
+      lineinfile:
+        path: "/etc/profile"
+        line: 'export PATH=$PATH:/usr/local/go/bin'
+        create: yes
+
+    - name: Verify Go installation
+      command: go version
+      register: go_version_check
+      failed_when: go_version_check.rc != 0
+
+    - name: Clone EigenLayer CLI Repository
+      git:
+        repo: "{{ eigenlayer_cli_repo }}"
+        dest: "~/eigenlayer-cli"
+        version: "master"
+        force: yes
+
+    - name: Build EigenLayer CLI
+      shell: |
+        cd ~/eigenlayer-cli
+        mkdir -p build
+        go build -o build/eigenlayer cmd/eigenlayer/main.go
+
+    - name: Copy EigenLayer binary to system bin
+      copy:
+        src: "~/eigenlayer-cli/build/eigenlayer"
+        dest: "/usr/local/bin/eigenlayer"
+        remote_src: yes
+        mode: '0755'
