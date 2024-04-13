@@ -1,0 +1,105 @@
+---
+- name: Comprehensive Cleanup of EigenLayer Installation and Environment
+  hosts: localhost
+  become: true
+  gather_facts: false
+  vars:
+    go_version: "1.21.4"
+
+  tasks:
+    # Cleaning up manually created files and directories
+    - name: Stop Docker containers if running
+      shell: docker compose down
+      args:
+        chdir: /root/eigenlayer/eigenda-operator-setup/holesky
+      ignore_errors: true
+
+    - name: Remove manually created configuration files and directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/.eigenlayer/operator/metadata.json
+        - /root/.eigenlayer/operator/operator.yaml
+        - /root/.eigenlayer/eigenda/holesky
+        - /root/.eigenlayer/operator_keys
+      ignore_errors: true
+
+    - name: Remove EigenLayer binary from system bin
+      file:
+        path: "/usr/local/bin/eigenlayer"
+        state: absent
+      ignore_errors: true
+
+    - name: Remove EigenLayer CLI Repository
+      file:
+        path: "~/eigenlayer-cli"
+        state: absent
+      ignore_errors: true
+
+    - name: Unset Go PATH Environment Variable
+      lineinfile:
+        path: "/etc/profile"
+        state: absent
+        regexp: '^export PATH=\$PATH:/usr/local/go/bin'
+      ignore_errors: true
+
+    - name: Remove Go installation
+      file:
+        path: "/usr/local/go"
+        state: absent
+      ignore_errors: true
+
+    - name: Remove Go binary download
+      file:
+        path: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+        state: absent
+      ignore_errors: true
+
+    - name: Cleanup EigenLayer CLI build artifacts and key files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/eigenlayer-cli/build
+        - /root/eigenlayer-cli
+      ignore_errors: true
+
+    - name: Find and delete private key files
+      find:
+        paths: /root/.eigenlayer
+        patterns: "*.key.json"
+      register: key_files
+      ignore_errors: true
+
+    - name: Delete found key files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ key_files.files }}"
+      ignore_errors: true
+
+    - name: Remove environment setup files and directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/.eigenlayer
+        - /root/eigenlayer
+      ignore_errors: true
+
+    - name: Remove any remaining temporary or log files
+      find:
+        paths: "/root"
+        patterns: "*.log, *.tmp"
+      register: temp_files
+      ignore_errors: true
+
+    - name: Delete temporary or log files found
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ temp_files.files }}"
+      ignore_errors: true
+
+
