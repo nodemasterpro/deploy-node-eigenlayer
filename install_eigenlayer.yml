@@ -30,6 +30,11 @@
       register: docker_compose_check
       failed_when: docker_compose_check.rc != 0
 
+    - name: Remove existing Go installation
+          file:
+            path: /usr/local/go
+            state: absent
+            
     - name: Download and Extract Go
       block:
         - name: Download Go binary
